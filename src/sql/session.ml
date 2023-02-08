@@ -4,7 +4,7 @@
    Copyright 2021 Anton Bachin *)
 
 
-
+open Caqti_request.Infix
 module Dream = Dream_pure
 module Cookie = Dream__server.Cookie
 module Session = Dream__server.Session
@@ -25,12 +25,30 @@ let serialize_payload payload =
   |> fun assoc -> `Assoc assoc
   |> Yojson.Basic.to_string
 
+(*
+let foreign_keys_on =
+ Caqti_type.unit ->. Caqti_type.unit @@
+    {eos|
+      PRAGMA foreign_keys = ON
+    |eos} 
+
+let foreign_keys_on =
+  Caqti_request.exec Caqti_type.unit "PRAGMA foreign_keys = ON"
+
+*)
+
 let insert =
+(*
   let query =
     R.exec T.(tup4 string string float string) {|
       INSERT INTO dream_session (id, label, expires_at, payload)
       VALUES ($1, $2, $3, $4)
-    |} in
+    |} *)
+  let query = T.(tup4 string string float string) ->. T.unit @@
+    {eos|
+      INSERT INTO dream_session (id, label, expires_at, payload)
+      VALUES ($1, $2, $3, $4)
+    |eos} in
 
   fun (module Db : DB) (session : Session.session) ->
     let payload = serialize_payload session.payload in
@@ -39,9 +57,13 @@ let insert =
     Caqti_lwt.or_fail result
 
 let find_opt =
-  let query =
+  let query = T.string ->? T.(tup3 string float string) @@
+    {eos|
+      SELECT label, expires_at, payload FROM dream_session WHERE id = $1
+    |eos} in
+(*  let query =   
     R.find_opt T.string T.(tup3 string float string)
-      "SELECT label, expires_at, payload FROM dream_session WHERE id = $1" in
+      "SELECT label, expires_at, payload FROM dream_session WHERE id = $1" in *)
 
   fun (module Db : DB) id ->
     let%lwt result = Db.find_opt query id in
@@ -67,8 +89,10 @@ let find_opt =
 
 let refresh =
   let query =
-    R.exec T.(tup2 float string)
-      "UPDATE dream_session SET expires_at = $1 WHERE id = $2" in
+    T.(tup2 float string) ->. T.unit @@
+    {eos|
+      UPDATE dream_session SET expires_at = $1 WHERE id = $2
+    |eos} in
 
   fun (module Db : DB) (session : Session.session) ->
     let%lwt result = Db.exec query (session.expires_at, session.id) in
@@ -76,8 +100,10 @@ let refresh =
 
 let update =
   let query =
-    R.exec T.(tup2 string string)
-      "UPDATE dream_session SET payload = $1 WHERE id = $2" in
+    T.(tup2 string string) ->. T.unit @@
+    {eos|
+      UPDATE dream_session SET payload = $1 WHERE id = $2
+    |eos} in
 
   fun (module Db : DB) (session : Session.session) ->
     let payload = serialize_payload session.payload in
@@ -85,7 +111,9 @@ let update =
     Caqti_lwt.or_fail result
 
 let remove =
-  let query = R.exec T.string "DELETE FROM dream_session WHERE id = $1" in
+  let query = T.string ->. T.unit @@
+    {eos| DELETE FROM dream_session WHERE id = $1
+    |eos} in
 
   fun (module Db : DB) id ->
     let%lwt result = Db.exec query id in
